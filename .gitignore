@@ -1,0 +1,9 @@
+.venv/
+work/
+settings.json
+__pycache__/
+*.pyc
+.DS_Store
+app_new/
+dist_windows/
+.vcredist_ok

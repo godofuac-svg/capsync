@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>CapSync</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="app">
+
+  <div class="header">
+    <div class="brand">
+      <div class="brand-text">
+        <span class="brand-team">FMB Team</span>
+        <span class="brand-name">Cap<span>Sync</span></span>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="pill" id="capcutPill">
+        <span class="icon" id="capcutPillIcon"></span>
+        <span id="capcutPillText">проверка…</span>
+      </div>
+      <button class="icon-btn" id="settingsBtn" title="Настройки">
+        <span class="icon" data-icon="settings"></span>
+      </button>
+    </div>
+  </div>
+
+  <div class="main" id="main">
+    <div id="queue"></div>
+    <button class="add-task-btn" id="addTaskBtn">
+      <span class="icon" data-icon="plus"></span> Добавить задачу
+    </button>
+  </div>
+
+  <div class="footer">
+    <div class="progress-row">
+      <span class="progress-label" id="progressLabel">Очередь пуста</span>
+      <span class="progress-pct" id="progressPct"></span>
+    </div>
+    <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    <div class="footer-actions">
+      <button class="btn btn-secondary" id="stopBtn" disabled>
+        <span class="icon" data-icon="stop"></span> Стоп
+      </button>
+      <button class="btn btn-primary" id="startBtn" disabled>
+        <span class="icon" data-icon="play"></span> Запустить
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<div id="overlayRoot"></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

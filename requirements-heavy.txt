@@ -1,0 +1,5 @@
+# Ставится не launch.command'ом, а самим приложением (core/setup.py) на экране
+# первого запуска — см. requirements-bootstrap.txt.
+faster-whisper>=1.0.0
+stable-ts>=2.17
+imageio-ffmpeg>=0.5

@@ -11,7 +11,10 @@ Name "CapSync"
 OutFile "CapSync-Setup.exe"
 InstallDir "$LOCALAPPDATA\CapSync"
 RequestExecutionLevel user
-SetCompressor /SOLID lzma
+; НЕ solid — соло-поток максимально жмёт, но распаковывается только последовательно
+; целиком, из-за чего на ~1ГБ установка ощутимо дольше. Без /SOLID NSIS жмёт каждый
+; файл отдельно — архив чуть крупнее, зато распаковка намного быстрее.
+SetCompressor lzma
 SetCompressorDictSize 32
 ShowInstDetails show
 Page instfiles

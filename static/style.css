@@ -161,6 +161,11 @@ body::before {
 .spin { animation: spin 0.9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+.task-error-text {
+  margin-top: 10px; padding: 9px 11px; border-radius: 9px; background: rgba(255,59,59,0.1);
+  border: 1px solid rgba(255,59,59,0.25); color: var(--err); font-size: 12.5px; line-height: 1.5;
+  white-space: pre-wrap; word-break: break-word;
+}
 .task-error-actions { margin-top: 8px; display: flex; gap: 8px; }
 .btn-ghost-sm {
   display: flex; align-items: center; gap: 6px; padding: 6px 11px; border-radius: 8px; font-size: 12px;

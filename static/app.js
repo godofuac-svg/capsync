@@ -215,8 +215,11 @@ function renderBackendTask(t, i) {
   // ошибке текст причины показываем прямо в карточке, не только во всплывающей подсказке
   // над иконкой — человек иначе видит просто "восклицательный знак" и не понимает, что не так.
   const errorBlock = t.status === "error" ? `
-    <div class="task-error-text">${escapeHtml(t.error || "Неизвестная ошибка")}</div>
     <div class="task-error-actions">
+      <span class="task-error-label">${iconSpan("warning")} Ошибка</span>
+      <button class="btn-ghost-sm" data-action="copy-error" data-task-id="${t.id}">
+        ${iconSpan("save")} Копировать
+      </button>
       <button class="btn-ghost-sm" data-action="save-log" data-log="${encodeURIComponent((state.backendState.last_error||{}).log_path||"")}">
         ${iconSpan("save")} Сохранить лог
       </button>
@@ -315,6 +318,31 @@ function wireBackendTaskEvents() {
       document.body.appendChild(a);
       a.click();
       a.remove();
+    };
+  });
+  document.querySelectorAll('[data-action="copy-error"]').forEach((btn) => {
+    btn.onclick = async () => {
+      const task = (state.backendState.tasks || []).find((t) => t.id === btn.dataset.taskId);
+      const text = (task && task.error) || "Неизвестная ошибка";
+      const label = btn.querySelector("span:last-child") || btn;
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch (e) {
+        // в части webview-рантаймов Clipboard API недоступен без явного фокуса/разрешения —
+        // запасной путь через скрытый textarea + execCommand работает почти везде
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        try { document.execCommand("copy"); } catch (e2) { /* сдаёмся молча */ }
+        ta.remove();
+      }
+      const original = btn.innerHTML;
+      btn.innerHTML = `${iconSpan("check")} Скопировано`;
+      setTimeout(() => { btn.innerHTML = original; }, 1500);
     };
   });
 }

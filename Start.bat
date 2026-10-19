@@ -1,4 +1,5 @@
 @echo off
+setlocal enabledelayedexpansion
 chcp 65001 >nul
 title CapSync
 cd /d "%~dp0"
@@ -20,10 +21,13 @@ if not exist "%~dp0.vcredist_ok" (
   echo Проверяю Visual C++ Redistributable...
   powershell -NoProfile -Command ^
     "$p = Start-Process -FilePath '%~dp0vc_redist.x64.exe' -ArgumentList '/install','/quiet','/norestart' -Verb RunAs -Wait -PassThru; exit $p.ExitCode"
-  set VCRC=%ERRORLEVEL%
+  set "VCRC=!ERRORLEVEL!"
+  rem !...! — отложенная подстановка: без неё %VCRC% в этом же блоке подставился бы ДО
+  rem выполнения set (то есть всегда пустой) и код ниже ВСЕГДА считал бы установку
+  rem неудачной, даже если она реально прошла. Именно на этом мы и спотыкнулись.
   rem 0 = ok, 3010 = ok но нужен ребут, 1638/5100 = уже стоит версия новее — тоже ок
-  if "%VCRC%"=="0" (echo ok > "%~dp0.vcredist_ok") else if "%VCRC%"=="3010" (echo ok > "%~dp0.vcredist_ok") else if "%VCRC%"=="1638" (echo ok > "%~dp0.vcredist_ok") else if "%VCRC%"=="5100" (echo ok > "%~dp0.vcredist_ok") else (
-    echo Visual C++ Redistributable не поставился ^(код %VCRC%^) — попробую ещё раз при следующем запуске.
+  if "!VCRC!"=="0" (echo ok > "%~dp0.vcredist_ok") else if "!VCRC!"=="3010" (echo ok > "%~dp0.vcredist_ok") else if "!VCRC!"=="1638" (echo ok > "%~dp0.vcredist_ok") else if "!VCRC!"=="5100" (echo ok > "%~dp0.vcredist_ok") else (
+    echo Visual C++ Redistributable не поставился ^(код !VCRC!^) — попробую ещё раз при следующем запуске.
   )
 )
 

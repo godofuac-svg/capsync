@@ -38,7 +38,14 @@ def _get_model(model_size):
         # На реальном прогоне (47с аудио, large-v3) int8 дал 6 секунд вместо ~210 — то же
         # качество, в ~35 раз быстрее. Это и есть ответ на "почему 40-секундная задача
         # идёт так долго" — раньше шла в float32, теперь не должна.
-        _model_cache[model_size] = stable_whisper.load_faster_whisper(model_size, compute_type="int8")
+        #
+        # device="cpu" — ОБЯЗАТЕЛЬНО явно, а не "auto" (дефолт). На машине с NVIDIA-видеокартой
+        # ctranslate2 в режиме auto сам пытается взять GPU и падает с "cublas64_12.dll is not
+        # found", потому что CUDA-рантайм мы не поставляем (он и не нужен — весь расчёт и так
+        # на CPU/int8). На Mac (Apple Silicon) эта ветка никогда не срабатывает, поэтому мы
+        # сами не могли это поймать — всплыло только на реальной Windows-машине с GPU.
+        _model_cache[model_size] = stable_whisper.load_faster_whisper(
+            model_size, device="cpu", compute_type="int8")
     return _model_cache[model_size]
 
 

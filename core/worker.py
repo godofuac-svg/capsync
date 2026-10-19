@@ -118,21 +118,31 @@ class Worker:
                     break
 
     def _run(self):
-        cfg = settings_mod.load()
-        draft_root = Path(cfg["capcut_folder"]) if cfg["capcut_folder"] else osdetect.autodetect()
-
-        _log("=== запускается очередь ===")
-        self._set_progress(0, 0, "Проверяется, не открыт ли CapCut…")
-        _log("проверяется, не открыт ли CapCut…")
-        capcut_app.close()
-
-        with self._lock:
-            queued = [t for t in self._tasks if t["status"] == "queued"]
-        total = len(queued)
-        _log(f"задач в очереди: {total}")
-
+        # ВСЁ тело метода — внутри try/finally, иначе любое исключение ДО основного
+        # цикла (settings.json битый, capcut_app.close() упал и т.п.) оставит
+        # self._running = True НАВСЕГДА — софт "зависнет" в состоянии "идёт работа",
+        # Старт/Стоп перестанут что-либо делать, и это нигде даже не залогируется.
         stopped = False
+        total = 0
         try:
+            cfg = settings_mod.load()
+            draft_root = Path(cfg["capcut_folder"]) if cfg["capcut_folder"] else osdetect.autodetect()
+
+            _log("=== запускается очередь ===")
+            self._set_progress(0, 0, "Проверяется, не открыт ли CapCut…")
+            _log("проверяется, не открыт ли CapCut…")
+            if not capcut_app.close():
+                # не блокируем задачу из-за этого (не закрылся — не значит, что обязательно
+                # будет гонка прямо сейчас), но ОБЯЗАТЕЛЬНО громко предупреждаем, раз вся
+                # защита от повреждения root_meta_info.json держится именно на этом закрытии
+                _log("ВНИМАНИЕ: CapCut не удалось закрыть — запись в его файлы проектов "
+                     "рискованна, пока он запущен. Рекомендуется закрыть CapCut вручную и повторить.")
+
+            with self._lock:
+                queued = [t for t in self._tasks if t["status"] == "queued"]
+            total = len(queued)
+            _log(f"задач в очереди: {total}")
+
             for idx, task in enumerate(queued, start=1):
                 if self._stop_event.is_set():
                     stopped = True
@@ -199,11 +209,26 @@ class Worker:
             elif not self._last_error:
                 self._set_progress(total, total, "Готово", percent=100)
 
+        except Exception as e:
+            # что-то упало ДО или МЕЖДУ задачами (не внутри самой задачи — то уже
+            # поймано выше) — settings.json битый, автодетект CapCut упал и т.п.
+            # Без этого except то же самое исключение просто вылетело бы из потока
+            # никем не пойманным, ушло бы только в stderr без контекста CapSync,
+            # и self._running не сбросился бы (см. finally) — завис бы навсегда.
+            _log(f"ОШИБКА (вне цикла задач): {e}")
+            _log(traceback.format_exc())
+            with self._lock:
+                self._last_error = {"summary": str(e), "task_id": None}
+
         finally:
-            cfg_now = settings_mod.load()
-            if cfg_now.get("auto_reopen_capcut", True):
-                _log("переоткрывается CapCut…")
-                capcut_app.reopen()
+            # finally не должен падать сам — иначе маскирует реальную причину выше
+            try:
+                cfg_now = settings_mod.load()
+                if cfg_now.get("auto_reopen_capcut", True):
+                    _log("переоткрывается CapCut…")
+                    capcut_app.reopen()
+            except Exception as e:
+                _log(f"не удалось переоткрыть CapCut: {e}")
             _log("=== очередь завершена ===")
             with self._lock:
                 self._running = False

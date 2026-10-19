@@ -9,11 +9,17 @@ import importlib
 import subprocess
 import sys
 import threading
+import time
+import traceback
 from pathlib import Path
 
 from . import settings as settings_mod
 
 _ROOT = Path(__file__).parent.parent
+
+
+def _log(msg: str):
+    print(f"[{time.strftime('%H:%M:%S')}] [setup] {msg}", flush=True)
 
 STEPS = [
     {"key": "ffmpeg", "label": "Проверка ffmpeg (чтение длительности аудио)"},
@@ -114,15 +120,20 @@ def run_setup():
         _state["overall"] = "running"
         _state["error"] = None
 
+    _log("=== экран первого запуска ===")
     try:
+        _log("проверяется ffmpeg…")
         _set("ffmpeg", "running")
         if _ffmpeg_path() is None:
+            _log("ffmpeg не найден — ставится portable-сборка (imageio-ffmpeg)…")
             _set("ffmpeg", "running", "Устанавливается portable-сборка ffmpeg…")
             subprocess.run([sys.executable, "-m", "pip", "install", "-q", "imageio-ffmpeg"], check=True)
         if _ffmpeg_path() is None:
             raise RuntimeError("Не удалось получить рабочий ffmpeg")
+        _log("ffmpeg ок")
         _set("ffmpeg", "done")
 
+        _log("проверяются пакеты распознавания речи…")
         _set("packages", "running", "Проверяются пакеты распознавания речи…")
         import_errors = {}
         for mod in ("faster_whisper", "stable_whisper"):
@@ -157,27 +168,38 @@ def run_setup():
                 f"Не импортируются модули распознавания речи ({details}). "
                 f"Похоже, не хватает Visual C++ Redistributable (x64) — поставь "
                 f"https://aka.ms/vs/17/release/vc_redist.x64.exe и перезапусти.")
+        _log("пакеты ок")
         _set("packages", "done")
 
         cfg = settings_mod.load()
         model_size = cfg["model_size"]
         marker = _warm_marker(model_size)
         if marker.is_file():
+            _log(f"модель «{model_size}» уже прогрета ранее — пропускаю")
             _set("model", "done")  # уже прогревали эту модель раньше — не лезем в сеть повторно
         else:
+            _log(f"грузится модель «{model_size}»…")
             _set("model", "running", f"Загружается модель «{model_size}» (в первый раз может занять несколько минут)…")
             from .align_client import AlignClient
+
+            def on_progress(msg):
+                _log(msg)
+                _set("model", "running", msg)
+
             client = AlignClient(sys.executable)
-            client.request({"cmd": "_warm", "model_size": model_size},
-                            on_progress=lambda msg: _set("model", "running", msg))
+            client.request({"cmd": "_warm", "model_size": model_size}, on_progress=on_progress)
             client.stop()
             _WARM_MARKERS_DIR.mkdir(parents=True, exist_ok=True)
             marker.touch()
+            _log("модель загружена")
             _set("model", "done")
 
+        _log("=== готово ===")
         with _state_lock:
             _state["overall"] = "done"
     except Exception as e:
+        _log(f"ОШИБКА: {e}")
+        _log(traceback.format_exc())
         with _state_lock:
             _state["overall"] = "error"
             _state["error"] = str(e)

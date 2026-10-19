@@ -13,6 +13,10 @@ import psutil
 
 OS_NAME = platform.system()
 
+
+def _log(msg: str):
+    print(f"[{time.strftime('%H:%M:%S')}] [capcut_app] {msg}", flush=True)
+
 _PROC_MATCH = {
     "Darwin": ("CapCut.app/Contents/MacOS/CapCut",),
     "Windows": ("CapCut.exe",),
@@ -50,32 +54,39 @@ def is_running() -> bool:
 
 
 def close(timeout: float = 12.0) -> bool:
-    """Закрывает CapCut (сначала мягко, затем принудительно). True, если после вызова не бежит."""
+    """Закрывает CapCut (сначала мягко, затем принудительно). True, если после вызова не бежит.
+    ВАЖНО: вызывающий код (worker.py) обязан проверять результат — вся защита от гонки
+    записи в root_meta_info.json строится на том, что CapCut реально закрыт к этому моменту."""
     procs = running_processes()
     if not procs:
         return True
+    _log(f"найдено {len(procs)} процесс(ов) CapCut — закрываю мягко…")
     # на маке процессов несколько (хелперы GPU/renderer/crash handler) — трогаем только
     # главный, хелперы завершатся сами вслед за ним; на всякий случай terminate() всем совпавшим
     for p in procs:
         try:
             p.terminate()
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            pass
+        except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
+            _log(f"не удалось мягко завершить процесс {p.pid}: {e}")
 
     deadline = time.time() + timeout
     while time.time() < deadline:
         if not is_running():
+            _log("CapCut закрыт")
             return True
         time.sleep(0.3)
 
     # не закрылось мягко — добиваем
+    _log(f"не закрылся за {timeout}с — добиваю принудительно…")
     for p in running_processes():
         try:
             p.kill()
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            pass
+        except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
+            _log(f"не удалось принудительно завершить процесс {p.pid}: {e}")
     time.sleep(0.5)
-    return not is_running()
+    ok = not is_running()
+    _log("CapCut закрыт" if ok else "CapCut НЕ закрылся — возможна гонка записи файлов проектов")
+    return ok
 
 
 def reopen() -> bool:
@@ -99,7 +110,11 @@ def reopen() -> bool:
             if exe:
                 subprocess.Popen([exe])
                 return True
+            _log("CapCut.exe не найден ни в PATH, ни в Program Files/LOCALAPPDATA — "
+                 "открой его вручную, автозапуск не сработал")
             return False
-    except Exception:
-        pass
-    return False
+        _log(f"переоткрытие не реализовано для ОС {OS_NAME!r}")
+        return False
+    except Exception as e:
+        _log(f"ошибка при попытке переоткрыть CapCut: {e}")
+        return False

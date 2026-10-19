@@ -38,11 +38,37 @@ rem подменяем лёгкие файлы поверх (python\ и ffmpeg\ 
 rem и перезапускаемся, без переотправки всего инсталлятора команде.
 if errorlevel 8 goto done
 if errorlevel 7 (
-  if exist "%~dp0app_new" (
-    robocopy "%~dp0app_new" "%~dp0" /E /NFL /NDL /NJH /NJS /NC /NS >nul
-    rmdir /s /q "%~dp0app_new"
-  )
+  if exist "%~dp0app_new" call :apply_update
   goto run
 )
 :done
 if errorlevel 1 pause
+exit /b
+
+:apply_update
+rem Python только что завершился — часть .py-модулей может на долю секунды ещё
+rem держать файловый хендл (антивирус/индексатор тоже иногда подхватывают файл
+rem сразу после записи). Без паузы+ретрая robocopy может ТИХО частично не
+rem докопировать файлы — получится смесь старого и нового кода, и это выглядело
+rem бы ровно как "обновление не применилось", без единой ошибки.
+rem (goto-ретрай умышленно вынесен в отдельную call-подпрограмму — goto ВНУТРИ
+rem скобочного if-блока в batch ненадёжен и может сломать разбор блока)
+timeout /t 1 /nobreak >nul
+set "RCATTEMPT=0"
+:copyretry
+robocopy "%~dp0app_new" "%~dp0" /E /NFL /NDL /NJH /NJS /NC /NS >nul
+set "RC=%ERRORLEVEL%"
+rem robocopy коды 0-7 — успех в разных формах (0=нечего копировать, 1=скопировано и т.д.),
+rem 8+ — реальная ошибка (например, файл был занят)
+if %RC% LSS 8 goto apply_update_done
+set /a RCATTEMPT=%RCATTEMPT%+1
+if %RCATTEMPT% LSS 5 (
+  echo Обновление: файл занят, пробую ещё раз ^(%RCATTEMPT%/5^)...
+  timeout /t 1 /nobreak >nul
+  goto copyretry
+)
+echo ВНИМАНИЕ: не удалось полностью скопировать обновление ^(robocopy код %RC%^) —
+echo код может быть частично старым. Останови CapSync и запусти Start.bat ещё раз.
+:apply_update_done
+rmdir /s /q "%~dp0app_new"
+exit /b

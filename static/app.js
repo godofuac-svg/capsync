@@ -309,15 +309,26 @@ async function detectLanguageForRow(row) {
 
 function wireBackendTaskEvents() {
   document.querySelectorAll('[data-action="save-log"]').forEach((btn) => {
-    btn.onclick = () => {
+    btn.onclick = async () => {
       const logPath = decodeURIComponent(btn.dataset.log);
       if (!logPath) return;
-      const a = document.createElement("a");
-      a.href = `/api/log?path=${encodeURIComponent(logPath)}`;
-      a.download = "";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.save_log) {
+        // нативный диалог "Сохранить как" — человек сам видит и выбирает путь,
+        // а не гадает, куда браузерное скачивание засунуло файл
+        const saved = await window.pywebview.api.save_log(logPath);
+        if (saved) {
+          const original = btn.innerHTML;
+          btn.innerHTML = `${iconSpan("check")} Сохранено`;
+          setTimeout(() => { btn.innerHTML = original; }, 1500);
+        }
+      } else {
+        const a = document.createElement("a");
+        a.href = `/api/log?path=${encodeURIComponent(logPath)}`;
+        a.download = "";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
     };
   });
   document.querySelectorAll('[data-action="copy-error"]').forEach((btn) => {

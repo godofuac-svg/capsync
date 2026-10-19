@@ -13,8 +13,13 @@ from pathlib import Path
 from . import align_client, capcut_app, capcut_inject, osdetect, settings as settings_mod
 
 _ROOT = Path(__file__).parent.parent
-_LOGS_DIR = _ROOT / "work" / "logs"
-_LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _log(msg: str):
+    """Единственный канал диагностики — консоль, в которой и так открыт CapSync
+    (Start.bat/launch.command не прячут окно терминала). Никаких лог-файлов и
+    диалогов сохранения — человек просто выделяет весь вывод терминала и шлёт его."""
+    print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
 
 
 class Worker:
@@ -112,33 +117,19 @@ class Worker:
                     t.update(fields)
                     break
 
-    def _save_error_log(self, task, exc: Exception, extra_trace: str = "") -> Path:
-        ts = time.strftime("%Y%m%d_%H%M%S")
-        path = _LOGS_DIR / f"error_{ts}_{task['id']}.log"
-        body = (
-            f"CapSync error log\n"
-            f"time: {time.ctime()}\n"
-            f"task_id: {task['id']}\n"
-            f"project_name: {task.get('project_name')}\n"
-            f"language: {task.get('language')}\n"
-            f"audio: {task.get('audio_path')}\n"
-            f"text:\n{task.get('text')}\n\n"
-            f"error: {exc}\n\n"
-            f"traceback:\n{extra_trace or traceback.format_exc()}\n"
-        )
-        path.write_text(body, encoding="utf-8")
-        return path
-
     def _run(self):
         cfg = settings_mod.load()
         draft_root = Path(cfg["capcut_folder"]) if cfg["capcut_folder"] else osdetect.autodetect()
 
+        _log("=== запускается очередь ===")
         self._set_progress(0, 0, "Проверяется, не открыт ли CapCut…")
+        _log("проверяется, не открыт ли CapCut…")
         capcut_app.close()
 
         with self._lock:
             queued = [t for t in self._tasks if t["status"] == "queued"]
         total = len(queued)
+        _log(f"задач в очереди: {total}")
 
         stopped = False
         try:
@@ -147,6 +138,8 @@ class Worker:
                     stopped = True
                     break
 
+                _log(f"--- задача {idx}/{total}: {task['project_name'] or '(без названия)'} "
+                     f"[{task['language']}] {task['audio_filename']} ---")
                 self._set_task_status(task["id"], status="running")
                 self._set_progress(idx, total, "Готовится задача…", percent=round((idx - 1) / total * 100))
 
@@ -156,6 +149,7 @@ class Worker:
                             "Папка проектов CapCut не найдена. Укажи её вручную в настройках.")
 
                     def on_progress(msg, _idx=idx, _task=task):
+                        _log(msg)
                         self._set_task_status(_task["id"], step=msg)
                         self._set_progress(_idx, total, msg)
 
@@ -167,6 +161,7 @@ class Worker:
                         "language": task["language"],
                         "model_size": cfg["model_size"],
                     }, on_progress=on_progress)
+                    _log(f"выравнивание готово: {len(result['lines'])} строк субтитров, язык={result['language']}")
 
                     if self._stop_event.is_set():
                         stopped = True
@@ -178,21 +173,20 @@ class Worker:
                         project_name=task["project_name"], audio_path=task["audio_path"],
                         caption_lines=result["lines"],
                     )
+                    _log(f"готово → проект «{info['name']}» ({info['folder']})")
                     self._set_task_status(task["id"], status="done", step=f"Готово → «{info['name']}»")
 
                 except align_client.Cancelled:
                     stopped = True
+                    _log("остановлено пользователем")
                     self._set_task_status(task["id"], status="cancelled", step="Остановлено")
                     break
                 except Exception as e:
-                    log_path = self._save_error_log(task, e)
+                    _log(f"ОШИБКА: {e}")
+                    _log(traceback.format_exc())
                     self._set_task_status(task["id"], status="error", step="Ошибка", error=str(e))
                     with self._lock:
-                        self._last_error = {
-                            "summary": str(e),
-                            "task_id": task["id"],
-                            "log_path": str(log_path),
-                        }
+                        self._last_error = {"summary": str(e), "task_id": task["id"]}
                     break  # одна ошибка — стоп всей очереди, не молотим дальше вслепую
 
             if stopped:
@@ -208,7 +202,9 @@ class Worker:
         finally:
             cfg_now = settings_mod.load()
             if cfg_now.get("auto_reopen_capcut", True):
+                _log("переоткрывается CapCut…")
                 capcut_app.reopen()
+            _log("=== очередь завершена ===")
             with self._lock:
                 self._running = False
             self._stop_event.clear()

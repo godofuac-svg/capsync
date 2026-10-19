@@ -129,6 +129,15 @@ body::before {
 .task-remove:hover { color: var(--err); background: rgba(255,77,77,0.1); }
 
 .task-row2 { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.task-row2-readonly .csel-trigger-readonly {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px; font-size: 12.5px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius-sm);
+  color: var(--text-dim); cursor: default;
+}
+.name-input-readonly {
+  display: flex; align-items: center; padding: 8px 10px; font-size: 12.5px; color: var(--text-dim);
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius-sm);
+}
 
 .audio-btn {
   display: flex; align-items: center; gap: 7px; padding: 8px 12px; border-radius: var(--radius-sm);

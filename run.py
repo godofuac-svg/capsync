@@ -78,19 +78,6 @@ def main():
                 result = self._window.create_file_dialog(webview.FOLDER_DIALOG)
                 return result[0] if result else None
 
-            def save_log(self, log_path):
-                """Явный диалог 'Сохранить как' вместо браузерного скачивания в непонятно
-                куда — человек сам видит и выбирает путь (жаловались, что не находят файл)."""
-                import shutil
-                suggested = os.path.basename(log_path)
-                result = self._window.create_file_dialog(
-                    webview.SAVE_DIALOG, save_filename=suggested)
-                dest = result if isinstance(result, str) else (result[0] if result else None)
-                if not dest:
-                    return None
-                shutil.copy2(log_path, dest)
-                return dest
-
         api = Api()
         window = webview.create_window("CapSync — FMB Team", URL, width=1180, height=820, min_size=(960, 640),
                                         background_color="#0A0A0C", js_api=api)

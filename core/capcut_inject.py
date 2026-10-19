@@ -121,6 +121,11 @@ def build_caption_material(template_material: dict, line: list[dict], fps: float
     return mat, line_start_s, line_end_s
 
 
+def _log(msg: str):
+    import time
+    print(f"[{time.strftime('%H:%M:%S')}]   {msg}", flush=True)
+
+
 def create_project(draft_root: Path, project_name: str | None,
                     audio_path: str, caption_lines: list[list[dict]]) -> dict:
     if not (TEMPLATE_PATH / "draft_info.json").is_file():
@@ -128,6 +133,7 @@ def create_project(draft_root: Path, project_name: str | None,
 
     new_folder = f"capsync_{uuid.uuid4().hex[:12]}"
     dest_path = draft_root / new_folder
+    _log(f"клонируется шаблон -> {new_folder}")
     shutil.copytree(TEMPLATE_PATH, dest_path)
 
     draft_file = dest_path / "draft_info.json"
@@ -169,8 +175,11 @@ def create_project(draft_root: Path, project_name: str | None,
         seg["source_timerange"] = None
         text_track["segments"].append(seg)
 
+    _log(f"собрано {len(caption_lines)} субтитров-сегментов")
+
     dur_s = _ffprobe_duration_seconds(audio_path)
     dur_us = _snap_frames(dur_s * 1_000_000, fps)
+    _log(f"длительность аудио: {dur_s:.2f}с")
 
     if not d["materials"]["audios"] or not audio_track["segments"]:
         raise RuntimeError(f"Встроенный шаблон повреждён (нет донора аудио-материала/сегмента): {TEMPLATE_PATH}")
@@ -192,11 +201,14 @@ def create_project(draft_root: Path, project_name: str | None,
 
     _atomic_write_json(draft_file, d)
     json.loads(draft_file.read_text(encoding="utf-8"))  # sanity reload
+    _log("draft_info.json записан")
 
     _sync_timeline_id(dest_path, old_id, new_id, d)
+    _log("ID таймлайна синхронизирован (draft_biz_config/timeline_layout/Timelines)")
 
     display_name = project_name or random_project_name()
     _register_in_root_index(draft_root, dest_path, display_name, dur_us)
+    _log(f"зарегистрировано в CapCut как «{display_name}»")
 
     return {"folder": new_folder, "path": str(dest_path), "name": display_name}
 

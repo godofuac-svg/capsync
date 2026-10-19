@@ -209,19 +209,24 @@ function renderDraftRow(row, i) {
   </div>`;
 }
 
+function langLabelFor(code) {
+  const found = state.langs.find((l) => l.value === code);
+  return found || { label: code, flag: null };
+}
+
 function renderBackendTask(t, i) {
   // пошаговый прогресс ("распознаётся язык…", "выравниваются слова…") живёт только в общем
   // прогресс-баре снизу — в самой карточке задачи только статус-иконка в углу. НО при
   // ошибке текст причины показываем прямо в карточке, не только во всплывающей подсказке
   // над иконкой — человек иначе видит просто "восклицательный знак" и не понимает, что не так.
+  // Подробный пошаговый лог и полный traceback — в терминале, где запущен CapSync
+  // (никакого файла/диалога сохранения — выделить и скопировать весь терминал проще).
+  const lang = langLabelFor(t.language);
   const errorBlock = t.status === "error" ? `
     <div class="task-error-actions">
-      <span class="task-error-label">${iconSpan("warning")} Ошибка</span>
+      <span class="task-error-label">${iconSpan("warning")} Ошибка — подробности в терминале</span>
       <button class="btn-ghost-sm" data-action="copy-error" data-task-id="${t.id}">
         ${iconSpan("save")} Копировать
-      </button>
-      <button class="btn-ghost-sm" data-action="save-log" data-log="${encodeURIComponent((state.backendState.last_error||{}).log_path||"")}">
-        ${iconSpan("save")} Сохранить лог
       </button>
     </div>` : "";
   return `
@@ -230,6 +235,11 @@ function renderBackendTask(t, i) {
       <div class="task-index">${i + 1}</div>
       <textarea class="task-text" readonly>${escapeHtml(t.text)}</textarea>
       <div class="task-status-badge ${statusLineClass(t.status)}" title="${escapeHtml(t.step || t.status)}">${statusIcon(t.status)}</div>
+    </div>
+    <div class="task-row2 task-row2-readonly">
+      <span class="audio-btn has-file">${iconSpan("paperclip")}<span>${escapeHtml(t.audio_filename || "")}</span></span>
+      <span class="csel-trigger csel-trigger-readonly">${lang.flag !== undefined ? flagImg(lang.flag) : ""}<span class="csel-trigger-label">${escapeHtml(lang.label)}</span></span>
+      ${t.project_name ? `<span class="name-input name-input-readonly">${escapeHtml(t.project_name)}</span>` : ""}
     </div>
     ${errorBlock}
   </div>`;
@@ -308,29 +318,6 @@ async function detectLanguageForRow(row) {
 }
 
 function wireBackendTaskEvents() {
-  document.querySelectorAll('[data-action="save-log"]').forEach((btn) => {
-    btn.onclick = async () => {
-      const logPath = decodeURIComponent(btn.dataset.log);
-      if (!logPath) return;
-      if (window.pywebview && window.pywebview.api && window.pywebview.api.save_log) {
-        // нативный диалог "Сохранить как" — человек сам видит и выбирает путь,
-        // а не гадает, куда браузерное скачивание засунуло файл
-        const saved = await window.pywebview.api.save_log(logPath);
-        if (saved) {
-          const original = btn.innerHTML;
-          btn.innerHTML = `${iconSpan("check")} Сохранено`;
-          setTimeout(() => { btn.innerHTML = original; }, 1500);
-        }
-      } else {
-        const a = document.createElement("a");
-        a.href = `/api/log?path=${encodeURIComponent(logPath)}`;
-        a.download = "";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      }
-    };
-  });
   document.querySelectorAll('[data-action="copy-error"]').forEach((btn) => {
     btn.onclick = async () => {
       const task = (state.backendState.tasks || []).find((t) => t.id === btn.dataset.taskId);

@@ -19,7 +19,6 @@ _ROOT = Path(__file__).parent
 _STATIC = _ROOT / "static"
 _WORK = _ROOT / "work"
 _WORK.mkdir(exist_ok=True)
-_LOGS_DIR = _WORK / "logs"
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory=_STATIC), name="static")
@@ -139,11 +138,3 @@ def start():
 def stop():
     worker.stop()
     return {"ok": True}
-
-
-@app.get("/api/log")
-def get_log(path: str):
-    p = Path(path).resolve()
-    if _LOGS_DIR.resolve() not in p.parents or not p.is_file():
-        return JSONResponse({"error": "not found"}, status_code=404)
-    return FileResponse(p, filename=p.name, media_type="text/plain")
